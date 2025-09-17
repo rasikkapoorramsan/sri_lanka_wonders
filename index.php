@@ -1,5 +1,5 @@
 <?php
-<?php include 'header.php'; ?>
+session_start();
 include 'config.php';
 
 if (!isset($_SESSION['user_id'])) {
@@ -19,7 +19,7 @@ $stmt_posts->execute();
 $posts_result = $stmt_posts->get_result();
 ?>
 
-
+<?php include 'header.php'; ?>
 <style>
     body {
         background: #f5e8c7; /* Warm parchment background */
