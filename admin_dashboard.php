@@ -7,6 +7,26 @@ if (!isset($_SESSION['admin_logged_in']) || !$_SESSION['admin_logged_in']) {
     exit();
 }
 
+// Fetch the admin's user_id if not set in session
+if (!isset($_SESSION['user_id'])) {
+    $admin_username = $_SESSION['admin_username'] ?? ''; // Adjust based on your login system
+    // Try with role column first
+    $stmt = $conn->prepare("SELECT id FROM users WHERE username = ? LIMIT 1"); // Removed 'role = 'admin'' assuming no role column
+    $stmt->bind_param("s", $admin_username);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result->num_rows > 0) {
+        $admin = $result->fetch_assoc();
+        $_SESSION['user_id'] = $admin['id'];
+    } else {
+        // Fallback: Use a hardcoded admin ID or handle error
+        $_SESSION['user_id'] = 1; // Default user_id (adjust to a valid admin ID)
+    }
+    $stmt->close();
+}
+
+$user_id = $_SESSION['user_id'];
+
 // Handle product addition
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
     $name = mysqli_real_escape_string($conn, $_POST['name']);
@@ -87,6 +107,42 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['accept_order'])) {
     }
 }
 
+// Handle post addition
+$post_success = '';
+$post_error = '';
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_post'])) {
+    $title = mysqli_real_escape_string($conn, $_POST['title']);
+    $content = mysqli_real_escape_string($conn, $_POST['content']);
+    $status = isset($_POST['status']) ? mysqli_real_escape_string($conn, $_POST['status']) : 'published';
+
+    $stmt = $conn->prepare("INSERT INTO posts (title, content, user_id, status, created_at) VALUES (?, ?, ?, ?, NOW())");
+    $stmt->bind_param("ssis", $title, $content, $user_id, $status);
+
+    if ($stmt->execute()) {
+        $post_success = "Post added successfully!";
+    } else {
+        $post_error = "Error adding post: " . $conn->error;
+    }
+    $stmt->close();
+}
+
+// Handle post deletion
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_post'])) {
+    $post_id = intval($_POST['post_id']);
+    $stmt = $conn->prepare("DELETE FROM posts WHERE id = ?");
+    $stmt->bind_param("i", $post_id);
+    if ($stmt->execute()) {
+        $post_success = "Post deleted successfully!";
+    } else {
+        $post_error = "Error deleting post: " . $conn->error;
+    }
+    $stmt->close();
+}
+
+// Fetch existing posts
+$post_sql = "SELECT p.*, u.username FROM posts p JOIN users u ON p.user_id = u.id ORDER BY p.created_at DESC";
+$post_result = $conn->query($post_sql);
+
 // Fetch existing products
 $product_sql = "SELECT * FROM products";
 $product_result = $conn->query($product_sql);
@@ -115,6 +171,7 @@ $user_result = $conn->query($user_sql);
         .order-items { max-height: 100px; overflow-y: auto; word-break: break-word; }
         .product-actions { white-space: nowrap; }
         .order-actions { white-space: nowrap; }
+        .post-actions { white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -227,6 +284,68 @@ $user_result = $conn->query($user_sql);
                 </tbody>
             </table>
         <?php } else { echo "<p>No users registered yet.</p>"; } ?>
+
+        <!-- Posts Management Section -->
+        <h3 class="mt-5">Manage Posts</h3>
+        <?php if (isset($post_success)) { echo "<div class='alert alert-success'>$post_success</div>"; } ?>
+        <?php if (isset($post_error)) { echo "<div class='alert alert-danger'>$post_error</div>"; } ?>
+        <form method="POST" class="mb-4">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Post Title</label>
+                        <input type="text" class="form-control" id="title" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="content" class="form-label">Post Content</label>
+                        <textarea class="form-control" id="content" name="content" rows="4" required></textarea>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-control" id="status" name="status">
+                            <option value="published">Published</option>
+                            <option value="draft">Draft</option>
+                        </select>
+                    </div>
+                    <button type="submit" name="add_post" class="btn btn-primary">Add Post</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Existing Posts List -->
+        <?php if ($post_result && $post_result->num_rows > 0) { ?>
+            <table class="table mt-3">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Content Preview</th>
+                        <th>Author</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php while ($post = $post_result->fetch_assoc()) { ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($post['title'] ?? 'N/A'); ?></td>
+                            <td><?php echo htmlspecialchars(substr($post['content'] ?? '', 0, 100)) . '...'; ?></td>
+                            <td><?php echo htmlspecialchars($post['username'] ?? 'N/A'); ?></td>
+                            <td><?php echo htmlspecialchars($post['created_at'] ?? 'N/A'); ?></td>
+                            <td><?php echo htmlspecialchars($post['status'] ?? 'N/A'); ?></td>
+                            <td class="post-actions">
+                                <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this post?');">
+                                    <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
+                                    <button type="submit" name="delete_post" class="btn btn-danger btn-sm">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php } ?>
+                </tbody>
+            </table>
+        <?php } else { echo "<p>No posts yet.</p>"; } ?>
 
         <!-- List Orders (excluding canceled) -->
         <h3 class="mt-5">Orders</h3>

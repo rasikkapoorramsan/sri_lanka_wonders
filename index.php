@@ -1,3 +1,24 @@
+<?php
+session_start();
+include 'config.php';
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
+$user_id = $_SESSION['user_id'];
+
+// Fetch published posts
+$stmt_posts = $conn->prepare("SELECT p.title, p.content, u.username, p.created_at 
+                             FROM posts p 
+                             JOIN users u ON p.user_id = u.id 
+                             WHERE p.status = 'published' 
+                             ORDER BY p.created_at DESC");
+$stmt_posts->execute();
+$posts_result = $stmt_posts->get_result();
+?>
+
 <?php include 'header.php'; ?>
 <style>
     body {
@@ -92,10 +113,17 @@
             font-size: 2em;
         }
     }
+    .post {
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: #fffaf0;
+        border-radius: 15px;
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    }
 </style>
 
 <div class="full-width-image">
-    <div class="overlay-text">Discover Sri Lanka's Heritage - 05:47 PM, Sep 14, 2025</div>
+    <div class="overlay-text">Discover Sri Lanka's Heritage - 03:24 PM, Sep 17, 2025</div>
 </div>
 
 <div class="card-container">
@@ -181,6 +209,22 @@
             </div>
         </div>
     </div>
+</div>
+
+<!-- Display Published Posts -->
+<div class="card-container">
+    <h3 class="card-title">Latest Posts</h3>
+    <?php if ($posts_result->num_rows > 0) {
+        while ($post = $posts_result->fetch_assoc()) { ?>
+            <div class="post">
+                <h5 class="card-title"><?php echo htmlspecialchars($post['title']); ?></h5>
+                <p class="card-text"><?php echo nl2br(htmlspecialchars($post['content'])); ?></p>
+                <small>Posted by <?php echo htmlspecialchars($post['username']); ?> on <?php echo $post['created_at']; ?></small>
+            </div>
+        <?php }
+    } else { ?>
+        <p class="card-text">No posts available yet.</p>
+    <?php } ?>
 </div>
 
 <?php include 'footer.php'; ?>

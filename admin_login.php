@@ -7,7 +7,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password = $_POST['password'];
 
     // Simple admin check (for demo; replace with secure auth in production)
-    if ($username === 'ramsan' && $password === 'ramsan1234') {
+    if ($username === 'srilanka' && $password === 'srilanka1234') {
         $_SESSION['admin_logged_in'] = true;
         header("Location: admin_dashboard.php");
         exit();

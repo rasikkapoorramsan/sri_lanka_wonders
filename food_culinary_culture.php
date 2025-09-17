@@ -1,10 +1,12 @@
-<?php 
-include 'header.php'; 
+<?php
+include 'header.php';
 include 'config.php';
 
-// Fetch all products
-$sql = "SELECT * FROM products";
-$result = $conn->query($sql);
+// Fetch all categories and their products
+$categories_sql = "SELECT id, name FROM categories";
+$categories_result = $conn->query($categories_sql);
+
+$search_term = isset($_GET['search']) ? trim($_GET['search']) : ''; // Get search term from URL
 ?>
 
 <style>
@@ -22,12 +24,39 @@ $result = $conn->query($sql);
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
         margin-bottom: 20px;
     }
+    h2 {
+        font-size: 2em;
+        color: #8b4513;
+        margin-top: 40px;
+        margin-bottom: 20px;
+        text-transform: capitalize;
+    }
     p.text-center {
         font-size: 1.2em;
         color: #6b4e31; /* Muted brown */
         max-width: 800px;
         margin: 0 auto 40px;
         line-height: 1.8;
+    }
+    .search-container {
+        max-width: 600px;
+        margin: 0 auto 30px;
+    }
+    .search-input {
+        border-radius: 25px;
+        padding: 12px 20px;
+        border: 2px solid #d4a017; /* Golden border */
+        font-size: 1.1em;
+    }
+    .search-input:focus {
+        border-color: #b8860b; /* Darker gold on focus */
+        box-shadow: 0 0 0 0.2rem rgba(212, 160, 23, 0.25);
+    }
+    .no-results {
+        text-align: center;
+        color: #6b4e31;
+        font-size: 1.2em;
+        margin-top: 40px;
     }
     .alert-success {
         background-color: #d4e4d2; /* Soft green for success */
@@ -110,6 +139,9 @@ $result = $conn->query($sql);
         h1 {
             font-size: 2em;
         }
+        h2 {
+            font-size: 1.5em;
+        }
         p.text-center {
             font-size: 1em;
         }
@@ -124,6 +156,18 @@ $result = $conn->query($sql);
 
 <h1 class="text-center mb-4">Food & Culinary Culture</h1>
 <p class="text-center">Explore a variety of authentic Sri Lankan dishes, rich in spices and flavors. Click on a card to learn more and purchase.</p>
+
+<!-- Search Box -->
+<div class="search-container">
+    <form method="GET" class="d-flex">
+        <input type="text" class="form-control search-input" name="search" placeholder="Search by cultural name (e.g., Sinhalese, Tamil, Moor)" value="<?php echo htmlspecialchars($search_term); ?>">
+        <button type="submit" class="btn btn-primary ms-2">Search</button>
+        <?php if ($search_term) { ?>
+            <a href="food_culinary_culture.php" class="btn btn-secondary ms-2">Clear</a>
+        <?php } ?>
+    </form>
+</div>
+
 <?php if (isset($_GET['order_success']) && $_GET['order_success'] == 1 && isset($_SESSION['success'])) { ?>
     <div class="alert alert-success text-center" role="alert">
         <?php echo $_SESSION['success']; ?>
@@ -131,23 +175,89 @@ $result = $conn->query($sql);
     <?php unset($_SESSION['success']); ?>
 <?php } ?>
 
-<div class="row">
-    <?php if ($result->num_rows > 0) { 
-        while($row = $result->fetch_assoc()) { ?>
-            <div class="col-md-4 mb-4">
-                <div class="card">
-                    <img src="<?php echo $row['image']; ?>" class="card-img-top" alt="<?php echo $row['name']; ?>">
-                    <div class="card-body">
-                        <h5 class="card-title"><?php echo $row['name']; ?></h5>
-                        <p class="card-text"><?php echo substr($row['description'], 0, 100) . '...'; ?></p>
-                        <a href="product_detail.php?id=<?php echo $row['id']; ?>" class="btn btn-primary">View Details</a>
-                    </div>
-                </div>
-            </div>
-        <?php } 
-    } else { ?>
-        <p class="text-center">No products available yet.</p>
+<div class="container mt-4">
+    <?php if ($search_term) { ?>
+        <p class="text-center">Searching for "<?php echo htmlspecialchars($search_term); ?>". Showing matching cultural foods in order.</p>
     <?php } ?>
+    
+    <?php
+    $all_categories = [];
+    if ($categories_result && $categories_result->num_rows > 0) {
+        $categories_result->data_seek(0);
+        while ($category = $categories_result->fetch_assoc()) {
+            $all_categories[] = $category;
+        }
+    }
+
+    if ($search_term) {
+        // Filter and sort matching categories alphabetically
+        $matching_categories = array_filter($all_categories, function($category) use ($search_term) {
+            return stripos($category['name'], $search_term) !== false;
+        });
+        usort($matching_categories, function($a, $b) {
+            return strnatcmp($a['name'], $b['name']);
+        });
+
+        $search_matched = !empty($matching_categories);
+        if ($search_matched) {
+            foreach ($matching_categories as $category) {
+                echo "<h2>" . htmlspecialchars($category['name']) . "</h2>";
+                echo "<div class='row'>";
+                
+                $products_sql = "SELECT * FROM products WHERE category_id = " . $category['id'];
+                $products_result = $conn->query($products_sql);
+                
+                if ($products_result && $products_result->num_rows > 0) {
+                    while ($row = $products_result->fetch_assoc()) { ?>
+                        <div class="col-md-4 mb-4">
+                            <div class="card">
+                                <img src="<?php echo $row['image']; ?>" class="card-img-top" alt="<?php echo $row['name']; ?>">
+                                <div class="card-body">
+                                    <h5 class="card-title"><?php echo $row['name']; ?></h5>
+                                    <p class="card-text"><?php echo substr($row['description'], 0, 100) . '...'; ?></p>
+                                    <a href="product_detail.php?id=<?php echo $row['id']; ?>" class="btn btn-primary">View Details</a>
+                                    <a href="add_to_cart.php?id=<?php echo $row['id']; ?>" class="btn btn-success">Add to to Cart</a>
+                                </div>
+                            </div>
+                        </div>
+                    <?php }
+                } else {
+                    echo "<p>No products in this category.</p>";
+                }
+                echo "</div>";
+            }
+        } else {
+            echo "<div class='no-results'>No cultural foods found for '" . htmlspecialchars($search_term) . "'. Please try a different search term.</div>";
+        }
+    } else {
+        // Display all categories and products in default order
+        foreach ($all_categories as $category) {
+            echo "<h2>" . htmlspecialchars($category['name']) . "</h2>";
+            echo "<div class='row'>";
+            
+            $products_sql = "SELECT * FROM products WHERE category_id = " . $category['id'];
+            $products_result = $conn->query($products_sql);
+            
+            if ($products_result && $products_result->num_rows > 0) {
+                while ($row = $products_result->fetch_assoc()) { ?>
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <img src="<?php echo $row['image']; ?>" class="card-img-top" alt="<?php echo $row['name']; ?>">
+                            <div class="card-body">
+                                <h5 class="card-title"><?php echo $row['name']; ?></h5>
+                                <p class="card-text"><?php echo substr($row['description'], 0, 100) . '...'; ?></p>
+                                <a href="product_detail.php?id=<?php echo $row['id']; ?>" class="btn btn-primary">View Details</a>
+                            </div>
+                        </div>
+                    </div>
+                <?php }
+            } else {
+                echo "<p>No products in this category.</p>";
+            }
+            echo "</div>";
+        }
+    }
+    ?>
 </div>
 
 <?php include 'footer.php'; ?>
