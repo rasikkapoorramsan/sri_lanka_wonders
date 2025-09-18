@@ -1,14 +1,6 @@
 <?php
 session_start();
 include 'config.php';
-
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
-
-$user_id = $_SESSION['user_id'];
-
 // Fetch published posts
 $stmt_posts = $conn->prepare("SELECT p.title, p.content, u.username, p.created_at 
                              FROM posts p 
